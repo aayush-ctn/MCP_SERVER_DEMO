@@ -182,34 +182,29 @@ const transports: { [sessionId: string]: StreamableHTTPServerTransport } = {};
 
 // Authorization middleware
 app.use("/mcp", (req: Request, res: Response, next) => {
-  const authHeader = req.headers.authorization;
+  const auth = req.headers.authorization;
 
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  if (!auth || !auth.startsWith("Bearer ")) {
     return res.status(401).json({
       jsonrpc: "2.0",
-      error: {
-        code: -32600,
-        message: "Unauthorized: Missing Bearer token",
-      },
+      error: { code: -32600, message: "Missing Bearer token" },
       id: null,
     });
   }
 
-  const token = authHeader.replace("Bearer ", "");
+  const token = auth.slice(7);
 
   if (token !== process.env.MCP_TOKEN) {
     return res.status(401).json({
       jsonrpc: "2.0",
-      error: {
-        code: -32600,
-        message: "Unauthorized: Invalid token",
-      },
+      error: { code: -32600, message: "Invalid token" },
       id: null,
     });
   }
 
   next();
 });
+
 
 // MCP endpoint with Streamable HTTP
 app.post("/mcp", async (req: Request, res: Response) => {
