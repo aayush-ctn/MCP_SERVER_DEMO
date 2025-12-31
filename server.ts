@@ -181,29 +181,29 @@ server.tool(
 const transports: { [sessionId: string]: StreamableHTTPServerTransport } = {};
 
 // Authorization middleware
-app.use("/mcp", (req: Request, res: Response, next) => {
-  const auth = req.headers.authorization;
+// app.use("/mcp", (req: Request, res: Response, next) => {
+//   const auth = req.headers.authorization;
 
-  if (!auth || !auth.startsWith("Bearer ")) {
-    return res.status(401).json({
-      jsonrpc: "2.0",
-      error: { code: -32600, message: "Missing Bearer token" },
-      id: null,
-    });
-  }
+//   if (!auth || !auth.startsWith("Bearer ")) {
+//     return res.status(401).json({
+//       jsonrpc: "2.0",
+//       error: { code: -32600, message: "Missing Bearer token" },
+//       id: null,
+//     });
+//   }
 
-  const token = auth.slice(7);
+//   const token = auth.slice(7);
 
-  if (token !== process.env.MCP_TOKEN) {
-    return res.status(401).json({
-      jsonrpc: "2.0",
-      error: { code: -32600, message: "Invalid token" },
-      id: null,
-    });
-  }
+//   if (token !== process.env.MCP_TOKEN) {
+//     return res.status(401).json({
+//       jsonrpc: "2.0",
+//       error: { code: -32600, message: "Invalid token" },
+//       id: null,
+//     });
+//   }
 
-  next();
-});
+//   next();
+// });
 
 
 // MCP endpoint with Streamable HTTP
