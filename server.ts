@@ -30,7 +30,7 @@ async function apiRequest<T>(path: string, options?: RequestInit): Promise<T | n
     "User-Agent": USER_AGENT,
     Accept: "application/json",
     Authorization: `Bearer ${TOKEN}`,
-    token: TOKEN
+    token: TOKEN || ""
   };
 
   try {
