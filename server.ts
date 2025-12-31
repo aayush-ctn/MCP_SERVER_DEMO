@@ -6,15 +6,16 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
+import "dotenv/config";
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-const IXFI_API_BASE ="https://api.zen-ex.com/api/front/";
+const IXFI_API_BASE = process.env.BASE_API;
 const USER_AGENT = "ixfi-app/1.0";
 
-const TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiNjc3YjVmNmM2NDRiZDJkMmFmZDBhY2FmIiwiY2xpZW50X3Rva2VuIjoiYWQzNGZiZWYtMDJhNC00ZGVlLWFiZTAtNTk3OGI1YjdkMjAyIiwiaWF0IjoxNzY3MTcyNDMxLCJleHAiOjE3NjcxNzk2MzF9.toApcYq0YLL7o9BbqLs9XKoa53a2FcSsrNXRs7q6qf4";
+const TOKEN = process.env.IXFI_API_TOKEN;
 
 // Create MCP server
 const server = new McpServer({
