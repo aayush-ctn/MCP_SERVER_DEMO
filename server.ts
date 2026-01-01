@@ -225,6 +225,7 @@ app.post("/mcp", async (req: Request, res: Response) => {
       transport = transports[sessionId];
     } 
     // 3. Handle NEW session (Gemini's Discovery/Initialize Phase)
+    // 3. Handle NEW session (Gemini's Discovery/Initialize Phase)
     else if (isInitializeRequest(req.body)) {
       const newSessionId = randomUUID();
       transport = new StreamableHTTPServerTransport({
@@ -233,8 +234,14 @@ app.post("/mcp", async (req: Request, res: Response) => {
       
       transports[newSessionId] = transport;
       await server.connect(transport);
+
+      // --- ADD THIS LINE BELOW ---
+      // This tells the Gemini CLI: "Here is your ID, now open the GET stream"
+      res.setHeader("mcp-session-id", newSessionId); 
+      // ---------------------------
+
       console.log(`✅ Handshake Started. New Session: ${newSessionId}`);
-    } 
+    }
     // 4. Fallback for malformed requests
     else {
       console.error("❌ Rejected: Missing session ID and not a valid initialize request.");
