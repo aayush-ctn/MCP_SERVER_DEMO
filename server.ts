@@ -241,6 +241,7 @@ app.post("/mcp", async (req: Request, res: Response) => {
       // ---------------------------
 
       console.log(`✅ Handshake Started. New Session: ${newSessionId}`);
+      await transport.handleRequest(req, res, req.body);
     }
     // 4. Fallback for malformed requests
     else {
