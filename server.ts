@@ -208,18 +208,21 @@ const transports: { [sessionId: string]: StreamableHTTPServerTransport } = {};
 
 // MCP endpoint with Streamable HTTP
 app.post("/mcp", async (req: Request, res: Response) => {
-  console.log("MCP request received");
-  
+  // 1. Log incoming request to see exactly what Gemini is sending
+  console.log("--- New MCP Request ---");
+  console.log("Headers:", JSON.stringify(req.headers, null, 2));
+  console.log("Body:", JSON.stringify(req.body, null, 2));
+
   try {
     const sessionId = req.headers["mcp-session-id"] as string | undefined;
     let transport: StreamableHTTPServerTransport;
 
+    // 2. Handle existing session
     if (sessionId && transports[sessionId]) {
-      // Reuse existing transport
       transport = transports[sessionId];
-      console.log("Reusing transport for session:", sessionId);
-    } else if (!sessionId && isInitializeRequest(req.body)) {
-      // New initialization request
+    } 
+    // 3. Handle NEW session (Gemini's Discovery/Initialize Phase)
+    else if (isInitializeRequest(req.body)) {
       const newSessionId = randomUUID();
       transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => newSessionId,
@@ -227,31 +230,24 @@ app.post("/mcp", async (req: Request, res: Response) => {
       
       transports[newSessionId] = transport;
       await server.connect(transport);
-      console.log("Created new transport with session:", newSessionId);
-    } else {
+      console.log(`✅ Handshake Started. New Session: ${newSessionId}`);
+    } 
+    // 4. Fallback for malformed requests
+    else {
+      console.error("❌ Rejected: Missing session ID and not a valid initialize request.");
       return res.status(400).json({
         jsonrpc: "2.0",
-        error: {
-          code: -32600,
-          message: "Invalid request: missing session or not an initialize request",
-        },
-        id: null,
+        error: { code: -32600, message: "Invalid Request: Initialization required." },
+        id: req.body?.id || null,
       });
     }
 
-    // Handle the request
+    // 5. Hand over to MCP SDK
     await transport.handleRequest(req, res, req.body);
   } catch (error) {
-    console.error("Error handling MCP request:", error);
+    console.error("🔥 Server Error:", error);
     if (!res.headersSent) {
-      res.status(500).json({
-        jsonrpc: "2.0",
-        error: {
-          code: -32603,
-          message: "Internal server error",
-        },
-        id: null,
-      });
+      res.status(500).json({ jsonrpc: "2.0", error: { code: -32603, message: "Internal Error" }, id: null });
     }
   }
 });
