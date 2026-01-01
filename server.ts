@@ -211,18 +211,17 @@ const transports: { [sessionId: string]: StreamableHTTPServerTransport } = {};
 
 // MCP endpoint with Streamable HTTP
 app.post("/mcp", async (req: Request, res: Response) => {
-  // 1. Log incoming request to see exactly what Gemini is sending
   console.log("--- New MCP Request ---");
 
   try {
     const sessionId = req.headers["mcp-session-id"] as string | undefined;
     let transport: StreamableHTTPServerTransport;
 
-    // 2. Handle existing session
+    // 1. Handle existing session
     if (sessionId && transports[sessionId]) {
       transport = transports[sessionId];
     } 
-    // 3. Handle NEW session (Gemini's Discovery/Initialize Phase)
+    // 2. Handle NEW session (Gemini's Discovery/Initialize Phase)
     else if (isInitializeRequest(req.body)) {
       const newSessionId = randomUUID();
       transport = new StreamableHTTPServerTransport({
@@ -234,13 +233,10 @@ app.post("/mcp", async (req: Request, res: Response) => {
       
       console.log(`✅ Handshake Started. New Session: ${newSessionId}`);
 
-      // Set header BEFORE the SDK takes over
+      // Set session header so client knows which ID to use in subsequent calls
       res.setHeader("mcp-session-id", newSessionId);
-
-      // CRITICAL: Call handleRequest without a separate manual res.json()
-      await transport.handleRequest(req, res, req.body);
-    }
-    // 4. Fallback for malformed requests
+    } 
+    // 3. Reject invalid requests that aren't initialization or part of a session
     else {
       console.error("❌ Rejected: Missing session ID and not a valid initialize request.");
       return res.status(400).json({
@@ -250,12 +246,19 @@ app.post("/mcp", async (req: Request, res: Response) => {
       });
     }
 
-    // 5. Hand over to MCP SDK
+    // 4. FINAL AND ONLY CALL to handleRequest
+    // The SDK takes over from here to send the actual JSON-RPC response
     await transport.handleRequest(req, res, req.body);
+
   } catch (error) {
     console.error("🔥 Server Error:", error);
+    // Only send error if headers haven't been finalized by the SDK yet
     if (!res.headersSent) {
-      res.status(500).json({ jsonrpc: "2.0", error: { code: -32603, message: "Internal Error" }, id: null });
+      res.status(500).json({ 
+        jsonrpc: "2.0", 
+        error: { code: -32603, message: "Internal Error" }, 
+        id: null 
+      });
     }
   }
 });
