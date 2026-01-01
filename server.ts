@@ -9,7 +9,11 @@ import { z } from "zod";
 import "dotenv/config";
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: '*',
+  exposedHeaders: ['mcp-session-id', 'mcp-protocol-version', 'Content-Type'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'mcp-session-id', 'mcp-protocol-version']
+}));
 app.use(express.json());
 
 const IXFI_API_BASE = process.env.BASE_API;
