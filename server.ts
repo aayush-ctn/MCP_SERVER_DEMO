@@ -213,8 +213,6 @@ const transports: { [sessionId: string]: StreamableHTTPServerTransport } = {};
 app.post("/mcp", async (req: Request, res: Response) => {
   // 1. Log incoming request to see exactly what Gemini is sending
   console.log("--- New MCP Request ---");
-  console.log("Headers:", JSON.stringify(req.headers, null, 2));
-  console.log("Body:", JSON.stringify(req.body, null, 2));
 
   try {
     const sessionId = req.headers["mcp-session-id"] as string | undefined;
@@ -225,7 +223,6 @@ app.post("/mcp", async (req: Request, res: Response) => {
       transport = transports[sessionId];
     } 
     // 3. Handle NEW session (Gemini's Discovery/Initialize Phase)
-    // 3. Handle NEW session (Gemini's Discovery/Initialize Phase)
     else if (isInitializeRequest(req.body)) {
       const newSessionId = randomUUID();
       transport = new StreamableHTTPServerTransport({
@@ -234,13 +231,13 @@ app.post("/mcp", async (req: Request, res: Response) => {
       
       transports[newSessionId] = transport;
       await server.connect(transport);
-
-      // --- ADD THIS LINE BELOW ---
-      // This tells the Gemini CLI: "Here is your ID, now open the GET stream"
-      res.setHeader("mcp-session-id", newSessionId); 
-      // ---------------------------
-
+      
       console.log(`✅ Handshake Started. New Session: ${newSessionId}`);
+
+      // Set header BEFORE the SDK takes over
+      res.setHeader("mcp-session-id", newSessionId);
+
+      // CRITICAL: Call handleRequest without a separate manual res.json()
       await transport.handleRequest(req, res, req.body);
     }
     // 4. Fallback for malformed requests
