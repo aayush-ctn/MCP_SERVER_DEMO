@@ -205,22 +205,6 @@ const transports: { [sessionId: string]: StreamableHTTPServerTransport } = {};
 //   next();
 // });
 
-// Add this GET endpoint alongside your POST endpoint
-app.get("/mcp", async (req: Request, res: Response) => {
-  const sessionId = req.query["mcp-session-id"] as string | undefined;
-
-  if (sessionId && transports[sessionId]) {
-    const transport = transports[sessionId];
-    console.log(`📡 Opening SSE stream for session: ${sessionId}`);
-    
-    // This connects the transport to the GET response stream
-    await transport.handleRequest(req, res);
-  } else {
-    res.status(404).send("Session not found. Initialize via POST first.");
-  }
-});
-
-
 // MCP endpoint with Streamable HTTP
 app.post("/mcp", async (req: Request, res: Response) => {
   // 1. Log incoming request to see exactly what Gemini is sending
@@ -264,6 +248,21 @@ app.post("/mcp", async (req: Request, res: Response) => {
     if (!res.headersSent) {
       res.status(500).json({ jsonrpc: "2.0", error: { code: -32603, message: "Internal Error" }, id: null });
     }
+  }
+});
+
+// Add this GET endpoint alongside your POST endpoint
+app.get("/mcp", async (req: Request, res: Response) => {
+  const sessionId = req.query["mcp-session-id"] as string | undefined;
+
+  if (sessionId && transports[sessionId]) {
+    const transport = transports[sessionId];
+    console.log(`📡 Opening SSE stream for session: ${sessionId}`);
+    
+    // This connects the transport to the GET response stream
+    await transport.handleRequest(req, res);
+  } else {
+    res.status(404).send("Session not found. Initialize via POST first.");
   }
 });
 
