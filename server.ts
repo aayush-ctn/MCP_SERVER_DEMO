@@ -211,18 +211,13 @@ const transports: { [sessionId: string]: StreamableHTTPServerTransport } = {};
 
 // MCP endpoint with Streamable HTTP
 app.post("/mcp", async (req: Request, res: Response) => {
-  console.log("--- New MCP Request ---");
-
   try {
     const sessionId = req.headers["mcp-session-id"] as string | undefined;
     let transport: StreamableHTTPServerTransport;
 
-    // 1. Handle existing session
     if (sessionId && transports[sessionId]) {
       transport = transports[sessionId];
-    } 
-    // 2. Handle NEW session (Gemini's Discovery/Initialize Phase)
-    else if (isInitializeRequest(req.body)) {
+    } else if (isInitializeRequest(req.body)) {
       const newSessionId = randomUUID();
       transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => newSessionId,
@@ -231,48 +226,33 @@ app.post("/mcp", async (req: Request, res: Response) => {
       transports[newSessionId] = transport;
       await server.connect(transport);
       
-      console.log(`✅ Handshake Started. New Session: ${newSessionId}`);
-
-      // Set session header so client knows which ID to use in subsequent calls
+      // CRITICAL: Set the header so Gemini knows the ID for the GET stream
       res.setHeader("mcp-session-id", newSessionId);
-    } 
-    // 3. Reject invalid requests that aren't initialization or part of a session
-    else {
-      console.error("❌ Rejected: Missing session ID and not a valid initialize request.");
-      return res.status(400).json({
-        jsonrpc: "2.0",
-        error: { code: -32600, message: "Invalid Request: Initialization required." },
-        id: req.body?.id || null,
-      });
-    }
-
-    // 4. FINAL AND ONLY CALL to handleRequest
-    // The SDK takes over from here to send the actual JSON-RPC response
-    await transport.handleRequest(req, res, req.body);
-
-  } catch (error) {
-    console.error("🔥 Server Error:", error);
-    // Only send error if headers haven't been finalized by the SDK yet
-    if (!res.headersSent) {
-      res.status(500).json({ 
+      console.log(`✅ Handshake Started: ${newSessionId}`);
+    } else {
+      return res.status(400).json({ 
         jsonrpc: "2.0", 
-        error: { code: -32603, message: "Internal Error" }, 
+        error: { code: -32600, message: "Invalid session" }, 
         id: null 
       });
     }
+
+    // Process the request through the SDK
+    await transport.handleRequest(req, res, req.body);
+  } catch (error) {
+    console.error("🔥 POST Error:", error);
+    if (!res.headersSent) res.sendStatus(500);
   }
 });
 
 // Add this GET endpoint alongside your POST endpoint
 app.get("/mcp", async (req: Request, res: Response) => {
-  const sessionId = req.query["mcp-session-id"] as string | undefined;
+  const sessionId = (req.query["mcp-session-id"] || req.headers["mcp-session-id"]) as string;
 
   if (sessionId && transports[sessionId]) {
-    const transport = transports[sessionId];
     console.log(`📡 Opening SSE stream for session: ${sessionId}`);
-    
-    // This connects the transport to the GET response stream
-    await transport.handleRequest(req, res);
+    // This establishes the persistent connection
+    await transports[sessionId].handleRequest(req, res);
   } else {
     res.status(404).send("Session not found. Initialize via POST first.");
   }
