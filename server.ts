@@ -225,8 +225,6 @@ app.post("/mcp", async (req: Request, res: Response) => {
       
       transports[newSessionId] = transport;
       await server.connect(transport);
-      
-      // CRITICAL: Set the header so Gemini knows the ID for the GET stream
       res.setHeader("mcp-session-id", newSessionId);
       console.log(`✅ Handshake Started: ${newSessionId}`);
     } else {
@@ -237,7 +235,6 @@ app.post("/mcp", async (req: Request, res: Response) => {
       });
     }
 
-    // Process the request through the SDK
     await transport.handleRequest(req, res, req.body);
   } catch (error) {
     console.error("🔥 POST Error:", error);
