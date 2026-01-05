@@ -89,23 +89,23 @@ interface NewsResponse {
 server.registerTool(
   "get_crypto_news",
   {
-    description: "Get cryptocurrency news articles filtered by date range, sentiment, and specific coins",
-    inputSchema: {
-      start_date: z.string().optional().describe("Start date in YYYY-MM-DD format"),
-      end_date: z.string().optional().describe("End date in YYYY-MM-DD format"),
-      per_page_limit: z.number().min(1).max(100).default(10).describe("Number of articles to return (1-100)"),
-      filter_val: z.enum(["all", "positive", "negative", "neutral"]).default("all").describe("Filter by sentiment"),
-      coins: z.array(z.string()).optional().describe("Array of coin tickers (e.g., ['BTC', 'ETH'])"),
-    },
+  description: "Get cryptocurrency news articles filtered by date range, sentiment, and specific coins. By default, fetches news from the last 7 days unless specific dates are requested.",
+  inputSchema: {
+    start_date: z.string().optional().describe("Start date in YYYY-MM-DD format. Leave empty to get news from the last 7 days. Current date is 2026-01-05."),
+    end_date: z.string().optional().describe("End date in YYYY-MM-DD format. Leave empty to use today's date. Current date is 2026-01-05."),
+    per_page_limit: z.number().min(1).max(100).default(10).describe("Number of articles to return (1-100)"),
+    filter_val: z.enum(["all", "positive", "negative", "neutral"]).default("all").describe("Filter by sentiment"),
+    coins: z.array(z.string()).optional().describe("Array of coin tickers (e.g., ['BTC', 'ETH'])"),
   },
-  async ({ per_page_limit = 24, filter_val = "all", coins }) => {
+},
+  async ({ start_date, end_date,per_page_limit = 24, filter_val = "all", coins }) => {
     const body = {
-      start_date: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      end_date: new Date().toISOString().split('T')[0],
-      per_page_limit,
-      filter_val,
-      coins: coins || [],
-    };
+    start_date: start_date || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    end_date: end_date || new Date().toISOString().split('T')[0],
+    per_page_limit,
+    filter_val,
+    coins: coins || [],
+  };
 
     const response = await apiRequest<NewsResponse>('v1/news-links/news-list/1', {
       method: 'POST',
