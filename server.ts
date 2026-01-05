@@ -175,6 +175,61 @@ server.registerTool(
 );
 
 server.registerTool(
+  "get_crypto_quotes",
+  {
+    description: "Get crypto buy/sell quotes",
+    inputSchema: {
+      vendors: z.array(z.string()),
+      crypto_currency: z.string(),
+      fiat_currency: z.string(),
+      from_amount: z.string(),
+      is_buy_sell: z.enum(["BUY", "SELL"]),
+      selected_country_code: z.string().length(2),
+    },
+  },
+  async (args) => {
+    // :one: Call your backend API
+    const response = await fetch("https://api.zen-ex.com/api/front/gateway/get-rates", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(args),
+    });
+    if (!response.ok) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: ":x: Failed to fetch crypto quotes",
+          },
+        ],
+      };
+    }
+    const result = await response.json();
+    // :two: Format response for humans (LLM-friendly)
+    const formatted = result.data
+      .map(
+        (q: any) =>
+          `• ${q.provider.toUpperCase()}
+  Amount: ${q.amount}
+  Rate: ${q.rate}
+  Available: ${q.can_process ? ":white_check_mark: Yes" : ":x: No"}`
+      )
+      .join("\n\n");
+    // :three: Return MCP-compatible response
+    return {
+      content: [
+        {
+          type: "text",
+          text: `:currency_exchange: Crypto Quotes (${args.crypto_currency}/${args.fiat_currency})\n\n${formatted}`,
+        },
+      ],
+    };
+  }
+);
+
+server.registerTool(
   "get_global_market",
   {
     description: "Get global crypto market data in different views",
