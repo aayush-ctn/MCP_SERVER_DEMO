@@ -61,6 +61,115 @@ interface MarketDataResponse {
   data: MarketData;
 }
 
+interface NewsArticle {
+  _id: string;
+  title: string;
+  slug: string;
+  description: string;
+  type: string;
+  owner: string;
+  link: string;
+  cover_image: string;
+  tickers: string[];
+  sentiment: "Positive" | "Negative" | "Neutral";
+  is_active: boolean;
+  posted_at: string;
+  created_at: string;
+  ixfi_link: string;
+}
+
+interface NewsResponse {
+  status: number;
+  message: string;
+  data: {
+    docs: NewsArticle[];
+  };
+}
+
+server.registerTool(
+  "get_crypto_news",
+  {
+    description: "Get cryptocurrency news articles filtered by date range, sentiment, and specific coins",
+    inputSchema: {
+      start_date: z.string().optional().describe("Start date in YYYY-MM-DD format"),
+      end_date: z.string().optional().describe("End date in YYYY-MM-DD format"),
+      per_page_limit: z.number().min(1).max(100).default(10).describe("Number of articles to return (1-100)"),
+      filter_val: z.enum(["all", "positive", "negative", "neutral"]).default("all").describe("Filter by sentiment"),
+      coins: z.array(z.string()).optional().describe("Array of coin tickers (e.g., ['BTC', 'ETH'])"),
+    },
+  },
+  async ({ start_date, end_date, per_page_limit = 10, filter_val = "all", coins }) => {
+    const body = {
+      start_date: start_date || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Default: 7 days ago
+      end_date: end_date || new Date().toISOString().split('T')[0], // Default: today
+      per_page_limit,
+      filter_val,
+      coins: coins || [],
+    };
+
+    const response = await apiRequest<NewsResponse>('v1/news-links/news-list/1', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+
+    if (!response || !response.data || !response.data.docs) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to fetch news articles`,
+          },
+        ],
+      };
+    }
+
+    const articles = response.data.docs;
+
+    if (articles.length === 0) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `No news articles found for the specified criteria.`,
+          },
+        ],
+      };
+    }
+
+    // Format the news articles
+    const formattedNews = articles.map((article, index) => {
+      const sentimentEmoji = article.sentiment === "Positive" ? "📈" : 
+                            article.sentiment === "Negative" ? "📉" : "➖";
+      const date = new Date(article.posted_at).toLocaleDateString();
+      
+      return [
+        `${index + 1}. ${sentimentEmoji} ${article.title}`,
+        `   Source: ${article.owner} | ${date}`,
+        `   Tickers: ${article.tickers.join(", ")}`,
+        `   ${article.description}`,
+        `   Link: ${article.link}`,
+      ].join("\n");
+    });
+
+    const summary = [
+      `📰 Crypto News (${articles.length} articles)`,
+      `Filter: ${filter_val} | Coins: ${coins && coins.length > 0 ? coins.join(", ") : "All"}`,
+      `Date Range: ${body.start_date} to ${body.end_date}`,
+      ``,
+      ...formattedNews,
+    ].join("\n");
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: summary,
+        },
+      ],
+    };
+  }
+);
+
 server.registerTool(
   "get_global_market",
   {
