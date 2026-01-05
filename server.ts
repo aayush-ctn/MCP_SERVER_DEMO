@@ -100,8 +100,12 @@ server.registerTool(
 },
   async ({ start_date, end_date,per_page_limit = 24, filter_val = "all", coins }) => {
     const body = {
-    start_date: start_date || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    end_date: end_date || new Date().toISOString().split('T')[0],
+    start_date: (start_date && start_date.trim() !== "") 
+      ? start_date 
+      : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    end_date: (end_date && end_date.trim() !== "") 
+      ? end_date 
+      : new Date().toISOString().split('T')[0],
     per_page_limit,
     filter_val,
     coins: coins || [],
