@@ -107,6 +107,8 @@ server.registerTool(
       body: JSON.stringify(body),
     });
 
+    console.log("News API Response:", response);
+
     if (!response || !response.data || !response.data.docs) {
       return {
         content: [
