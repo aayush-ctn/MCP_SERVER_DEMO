@@ -91,14 +91,19 @@ server.registerTool(
   {
     description: "Get cryptocurrency news articles filtered by date range, sentiment, and specific coins",
     inputSchema: {
+      start_date: z.string().optional().describe("Start date in YYYY-MM-DD format"),
+      end_date: z.string().optional().describe("End date in YYYY-MM-DD format"),
+      per_page_limit: z.number().min(1).max(100).default(10).describe("Number of articles to return (1-100)"),
       filter_val: z.enum(["all", "positive", "negative", "neutral"]).default("all").describe("Filter by sentiment"),
       coins: z.array(z.string()).optional().describe("Array of coin tickers (e.g., ['BTC', 'ETH'])"),
     },
   },
-  async ({ filter_val = "all", coins }) => {
+  async ({ per_page_limit = 24, filter_val = "all", coins }) => {
     const body = {
-      start_date: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Default: 7 days ago
-      end_date: new Date().toISOString().split('T')[0], // Default: today
+      start_date: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      end_date: new Date().toISOString().split('T')[0],
+      per_page_limit,
+      filter_val,
       coins: coins || [],
     };
 
@@ -106,8 +111,6 @@ server.registerTool(
       method: 'POST',
       body: JSON.stringify(body),
     });
-
-    console.log("News API Response:", response);
 
     if (!response || !response.data || !response.data.docs) {
       return {
