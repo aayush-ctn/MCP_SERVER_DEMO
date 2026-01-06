@@ -7,86 +7,54 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 const MCP_BASE = process.env.MCP_BASE || "http://localhost:3000";
 const API_KEY = process.env.MCP_SERVER_API_KEY;
 const SECRET_KEY = process.env.MCP_SERVER_SECRET_KEY;
+//const API_ENDPOINT = process.env.BLOCKVERSE_API_URL;
+const API_ENDPOINT = process.env.GEMINI_API_URL;
 
-// Model Configuration
-const MODEL_CONFIGS = {
-    CHATGPT: {
-        endpoint: process.env.BLOCKVERSE_API_URL,
-        models: {
-            "gpt-4o": "gpt-4o",
-            "gpt-4o-mini": "gpt-4o-mini",
-            "gpt-4-turbo": "gpt-4-turbo-preview"
-        },
-        defaultModel: "gpt-4o-mini"
-    },
-    GEMINI: {
-        endpoint: process.env.GEMINI_API_URL,
-        models: {
-            "gemini-pro": "gemini-1.5-pro",
-            "gemini-flash": "gemini-1.5-flash",
-            "gemini-exp": "gemini-2.0-flash-exp",
-            "gemini-3-flash-preview": "gemini-3-flash-preview"
-        },
-        defaultModel: "gemini-1.5-flash"
-    }
-};
+const transport = new StreamableHTTPClientTransport(
+    new URL(MCP_BASE)
+);
 
-// Current provider - change this to switch between providers
-let CURRENT_PROVIDER = "GEMINI"; // Options: "CHATGPT" or "GEMINI"
-let CURRENT_MODEL = MODEL_CONFIGS[CURRENT_PROVIDER].defaultModel;
-
-const transport = new StreamableHTTPClientTransport(new URL(MCP_BASE));
 const mcpClient = new Client(
     { name: "mcp-test-client", version: "1.0.0" },
     { capabilities: {} }
 );
 
+// Track connection status
 let isConnected = false;
 
-// Generate HMAC signature
+// Generate HMAC signature with correct format
 function generateSignature(method, path, body, timestamp, secretKey) {
     const message = `${method}|${path}|${timestamp}|${body}`;
     const signature = crypto
         .createHmac("sha256", secretKey)
         .update(message, "utf8")
         .digest("hex");
+
     return signature;
 }
 
-// Sanitize schema for Gemini (removes forbidden keys)
+// Add the sanitizeSchemaForGemini function before the runMCPClient function
 function sanitizeSchemaForGemini(schema) {
     if (typeof schema !== 'object' || schema === null) return schema;
 
     const newSchema = Array.isArray(schema) ? [] : {};
+
+    // List of keys to strictly remove for Gemini compatibility
     const forbiddenKeys = [
         '$schema',
         'additionalProperties',
         'title',
-        'description_internal'
+        'description_internal' // Some MCP servers use this
     ];
 
     for (const key in schema) {
         if (forbiddenKeys.includes(key)) continue;
+
+        // Recursively clean nested objects and arrays
         newSchema[key] = sanitizeSchemaForGemini(schema[key]);
     }
 
     return newSchema;
-}
-
-// Prepare tools based on provider
-function prepareTools(mcpTools, provider) {
-    return mcpTools.map(tool => {
-        const parameters = provider === "GEMINI" 
-            ? sanitizeSchemaForGemini(tool.inputSchema)
-            : tool.inputSchema;
-
-        return {
-            type: "function",
-            name: tool.name,
-            description: tool.description,
-            parameters: parameters,
-        };
-    });
 }
 
 // Generate UUIDs
@@ -94,7 +62,7 @@ function generateUUID() {
     return crypto.randomUUID().replace(/-/g, '');
 }
 
-// Connect to MCP server
+// Connect to MCP server once
 async function connectToMCP() {
     if (!isConnected) {
         console.log("Connecting to MCP server...");
@@ -104,7 +72,7 @@ async function connectToMCP() {
     }
 }
 
-// Execute MCP tool
+// Execute MCP tool and return result
 async function executeMCPTool(toolName, args) {
     try {
         console.log(`Executing tool: ${toolName}`);
@@ -123,23 +91,16 @@ async function executeMCPTool(toolName, args) {
     }
 }
 
-// Make API call
-async function callAIAPI(requestBody) {
-    const config = MODEL_CONFIGS[CURRENT_PROVIDER];
-    const endpoint = config.endpoint;
-
-    if (!endpoint) {
-        throw new Error(`API endpoint not configured for ${CURRENT_PROVIDER}`);
-    }
-
+// Make API call to ChatGPT
+async function callChatGPTAPI(requestBody) {
     const bodyString = JSON.stringify(requestBody);
-    const url = new URL(endpoint);
+    const url = new URL(API_ENDPOINT);
     const path = url.pathname;
     const method = "POST";
     const timestamp = Math.floor(Date.now() / 1000).toString();
     const signature = generateSignature(method, path, bodyString, timestamp, SECRET_KEY);
 
-    const response = await fetch(endpoint, {
+    const response = await fetch(API_ENDPOINT, {
         method: method,
         headers: {
             "Content-Type": "application/json",
@@ -159,34 +120,39 @@ async function callAIAPI(requestBody) {
     return JSON.parse(responseText);
 }
 
-// Main conversation handler
+// Main function to handle conversation with function calling
 async function runMCPClient(userInput, sessionUUID = null, userUUID = null) {
     try {
         await connectToMCP();
         const { tools: mcpTools } = await mcpClient.listTools();
-        const tools = prepareTools(mcpTools, CURRENT_PROVIDER);
+        const tools = mcpTools.map(tool => ({
+            type: "function",
+            name: tool.name,
+            description: tool.description,
+            parameters: sanitizeSchemaForGemini(tool.inputSchema),
+        }));
 
         const currentSessionUUID = sessionUUID || generateUUID();
         const currentUserUUID = userUUID || generateUUID();
 
-        // Initial request
+        // Initial request body
         const requestBody = {
             input: userInput,
-            model: CURRENT_MODEL,
+            model: "gemini-3-flash-preview",
             source: "mcp_server",
             session_uuid: currentSessionUUID,
             user_uuid: currentUserUUID,
             tools: tools
         };
 
-        console.log(`\nUsing: ${CURRENT_PROVIDER} - ${CURRENT_MODEL}`);
         console.log("Sending message to API...\n");
 
-        let result = await callAIAPI(requestBody);
+        // Make initial API call
+        let result = await callChatGPTAPI(requestBody);
 
-        // Function calling loop
+        // Handle function calling loop
         let iteration = 0;
-        const maxIterations = 10;
+        const maxIterations = 10; // Prevent infinite loops
 
         while (result.is_function_call && iteration < maxIterations) {
             iteration++;
@@ -206,26 +172,26 @@ async function runMCPClient(userInput, sessionUUID = null, userUUID = null) {
                 });
             }
 
-            // Send function results back
+            // Send function results back to API
             console.log("\n Sending function results back to API...\n");
 
             const followUpRequest = {
-                input: JSON.stringify(functionResults),
-                model: CURRENT_MODEL,
+                input: JSON.stringify(functionResults), // Send results as input
+                model: "gemini-3-flash-preview",
                 source: "mcp_server",
-                session_uuid: currentSessionUUID,
-                user_uuid: currentUserUUID,
+                session_uuid: currentSessionUUID, // Keep same session
+                user_uuid: currentUserUUID, // Keep same user
                 tools: tools
             };
 
-            result = await callAIAPI(followUpRequest);
+            result = await callChatGPTAPI(followUpRequest);
         }
 
         if (iteration >= maxIterations) {
             console.warn("Max iterations reached. Stopping to prevent infinite loop.");
         }
 
-        // Display final response
+        // Return final text response
         console.log("\n Final Response:");
         console.log("━".repeat(60));
         console.log(result.md_response || "No response text");
@@ -244,38 +210,10 @@ async function runMCPClient(userInput, sessionUUID = null, userUUID = null) {
         };
 
     } catch (error) {
+
         console.error("Error:", error.message);
         throw error;
     }
-}
-
-// Switch provider
-function switchProvider(provider, model = null) {
-    if (!MODEL_CONFIGS[provider]) {
-        console.log(`Invalid provider. Available: ${Object.keys(MODEL_CONFIGS).join(", ")}`);
-        return false;
-    }
-
-    CURRENT_PROVIDER = provider;
-    CURRENT_MODEL = model || MODEL_CONFIGS[provider].defaultModel;
-    
-    console.log(`\n✓ Switched to ${provider} using model: ${CURRENT_MODEL}\n`);
-    return true;
-}
-
-// List available models
-function listModels() {
-    console.log("\n Available Models:");
-    console.log("━".repeat(60));
-    
-    for (const [provider, config] of Object.entries(MODEL_CONFIGS)) {
-        console.log(`\n ${provider}:`);
-        for (const [key, value] of Object.entries(config.models)) {
-            const current = (provider === CURRENT_PROVIDER && value === CURRENT_MODEL) ? " (current)" : "";
-            console.log(`   • ${key}: ${value}${current}`);
-        }
-    }
-    console.log("\n" + "━".repeat(60) + "\n");
 }
 
 const rl = readline.createInterface({
@@ -283,6 +221,7 @@ const rl = readline.createInterface({
     output: process.stdout
 });
 
+// Store session info for continuous conversation
 let currentSession = {
     sessionUUID: null,
     userUUID: null
@@ -290,12 +229,11 @@ let currentSession = {
 
 function loop() {
     rl.question("\nYOU > ", async (input) => {
-        // Handle commands
         if (input === "exit") {
             rl.close();
             process.exit(0);
         }
-        
+
         if (input === "reset") {
             currentSession = { sessionUUID: null, userUUID: null };
             console.log("Session reset. Starting new conversation.\n");
@@ -303,26 +241,6 @@ function loop() {
             return;
         }
 
-        if (input === "models") {
-            listModels();
-            loop();
-            return;
-        }
-
-        // Switch provider: "use chatgpt" or "use gemini"
-        if (input.startsWith("use ")) {
-            const parts = input.split(" ");
-            const provider = parts[1].toUpperCase();
-            const model = parts[2]; // Optional specific model
-            
-            if (switchProvider(provider, model)) {
-                currentSession = { sessionUUID: null, userUUID: null };
-                console.log("Session reset for new provider.");
-            }
-            loop();
-            return;
-        }
-        
         try {
             const result = await runMCPClient(
                 input,
@@ -330,13 +248,15 @@ function loop() {
                 currentSession.userUUID
             );
 
+            // Store session info for next message
             currentSession.sessionUUID = result.sessionUUID;
             currentSession.userUUID = result.userUUID;
 
         } catch (error) {
+            console.log(error)
             console.log("\nERROR >", error.message, "\n");
         }
-        
+
         loop();
     });
 }
@@ -344,9 +264,9 @@ function loop() {
 // Initialize
 async function init() {
     console.log("╔════════════════════════════════════════╗");
-    console.log("║   MCP Client - Multi-Model Support     ║");
+    console.log("║     MCP Client with ChatGPT API        ║");
     console.log("╚════════════════════════════════════════╝\n");
-    
+    // Connect to MCP server at startup
     try {
         await connectToMCP();
     } catch (error) {
@@ -354,15 +274,8 @@ async function init() {
         process.exit(1);
     }
 
-    console.log(`Current Provider: ${CURRENT_PROVIDER}`);
-    console.log(`Current Model: ${CURRENT_MODEL}\n`);
-    
     console.log("Commands:");
     console.log("  • Type your message to chat");
-    console.log("  • Type 'models' to list available models");
-    console.log("  • Type 'use chatgpt' to switch to ChatGPT");
-    console.log("  • Type 'use gemini' to switch to Gemini");
-    console.log("  • Type 'use chatgpt gpt-4o' to use specific model");
     console.log("  • Type 'reset' to start a new conversation");
     console.log("  • Type 'exit' to quit");
 
