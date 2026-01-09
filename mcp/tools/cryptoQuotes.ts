@@ -16,6 +16,7 @@ export function registerCryptoQuotesTool() {
       },
     },
     async (args) => {
+      console.log("[MCP TOOL] get_crypto_quotes called");
       const response = await fetch(
         "https://api.zen-ex.com/api/front/gateway/get-rates",
         {

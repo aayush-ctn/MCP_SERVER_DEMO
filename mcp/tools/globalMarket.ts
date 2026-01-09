@@ -19,6 +19,7 @@ export function registerGlobalMarketTool() {
       },
     },
     async ({ view }) => {
+      console.log("[MCP TOOL] get_global_market called");
       const response = await apiRequest<MarketDataResponse>(
         "api/public-api/get-global-market-data"
       );

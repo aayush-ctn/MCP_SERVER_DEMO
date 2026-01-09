@@ -29,6 +29,14 @@ const MODEL_CONFIGS = {
             "gemini-2.5-flash": "gemini-2.5-flash"
         },
         defaultModel: "gemini-1.5-flash"
+    },
+    MISTRAL: {
+        endpoint: process.env.MISTRAL_API_URL,
+        models: {
+            "mistral-7b-instruct": "mistral-7b-instruct",
+            "mistral-large-latest": "mistral-large-latest"
+        },
+        defaultModel: "mistral-large-latest"
     }
 };
 
